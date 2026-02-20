@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: linkedin-research-assistant
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server/index.js
+    envVars:
+      - key: BRIGHTDATA_API_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production

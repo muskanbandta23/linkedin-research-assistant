@@ -319,6 +319,53 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 3px; }
 
+/* ============ BRIGHTDATA BADGE ============ */
+.bd-badge {
+  font-size: 0.65rem;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.bd-badge.live {
+  background: linear-gradient(135deg, #00c853, #00e676);
+  color: #000;
+  animation: livePulse 2s ease infinite;
+}
+.bd-badge.static {
+  background: var(--glass-bg);
+  color: var(--text-2);
+  border: 1px solid var(--glass-border);
+}
+@keyframes livePulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(0, 200, 83, 0.3); }
+  50% { box-shadow: 0 0 12px rgba(0, 200, 83, 0.6); }
+}
+
+/* ============ LIVE SCRAPED CARDS ============ */
+.company-card.live-scraped {
+  border-top: 2px solid #00c853;
+}
+.company-card.live-scraped::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #00c853, #00e676, #69f0ae);
+  animation: liveShimmer 2s ease infinite;
+}
+@keyframes liveShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.cc-badge.live-badge {
+  background: linear-gradient(135deg, #00c853, #00e676);
+  color: #000;
+  font-size: 0.6rem;
+  padding: 2px 6px;
+}
+
 /* ============ RESPONSIVE ============ */
 @media (max-width: 768px) {
   .top-bar { flex-wrap: wrap; gap: 12px; }

@@ -1,3 +1,14 @@
+// ============ MODE DETECTION ============
+// If running on GitHub Pages (no backend), use static data
+// If running with backend (localhost/Render), use API with BrightData
+const isStatic = !window.location.hostname.includes('localhost') &&
+  !window.location.hostname.includes('127.0.0.1') &&
+  !window.location.hostname.includes('onrender.com') &&
+  !window.location.hostname.includes('railway.app');
+
+const API = isStatic ? null : '';
+let brightdataEnabled = false;
+
 // ============ STATIC DATA HELPERS ============
 function shuffle(arr) {
   const a = [...arr];
@@ -8,7 +19,7 @@ function shuffle(arr) {
   return a;
 }
 
-function getCompanies(category, { search = '', region = '', complexity = '' } = {}) {
+function getCompaniesStatic(category, { search = '', region = '', complexity = '' } = {}) {
   let list = COMPANIES_DB.filter(c => c.category === category);
   if (search) {
     const q = search.toLowerCase();
@@ -23,7 +34,7 @@ function getCompanies(category, { search = '', region = '', complexity = '' } = 
   return shuffle(list);
 }
 
-function getStats() {
+function getStatsStatic() {
   const all = COMPANIES_DB;
   return {
     totalCompanies: all.length,
@@ -38,17 +49,49 @@ function getStats() {
 }
 
 // ============ INIT ============
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   loadTheme();
+  buildQuickChips();
+
+  // Check BrightData status if backend available
+  if (API !== null) {
+    try {
+      const status = await (await fetch(`${API}/api/brightdata/status`)).json();
+      brightdataEnabled = status.brightdataEnabled;
+      updateBrightDataBadge();
+    } catch (e) {
+      console.log('Backend not available, using static mode');
+    }
+  }
+
   loadICP();
   loadHighFit();
   loadStats();
-  buildQuickChips();
 
   document.getElementById('company-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') searchLinkedIn();
   });
 });
+
+// ============ BRIGHTDATA STATUS BADGE ============
+function updateBrightDataBadge() {
+  const badge = document.getElementById('bd-badge');
+  if (badge) {
+    if (brightdataEnabled) {
+      badge.textContent = '⚡ Live LinkedIn';
+      badge.className = 'bd-badge live';
+      badge.title = 'BrightData connected - Live LinkedIn scraping enabled';
+    } else if (API !== null) {
+      badge.textContent = '📊 Static Data';
+      badge.className = 'bd-badge static';
+      badge.title = 'Using pre-researched company database';
+    } else {
+      badge.textContent = '📊 Static Data';
+      badge.className = 'bd-badge static';
+      badge.title = 'GitHub Pages mode - Using embedded data';
+    }
+  }
+}
 
 // ============ THEME ============
 function toggleTheme() {
@@ -147,37 +190,95 @@ function quickSearch(company) {
 }
 
 // ============ ICP SIMILAR ============
-function loadICP() {
+async function loadICP() {
   const search = document.getElementById('icp-search-input')?.value || '';
   const region = document.getElementById('icp-region-filter')?.value || '';
-  const companies = getCompanies('icp-similar', { search, region });
+  const grid = document.getElementById('icp-grid');
 
+  // Try API mode first
+  if (API !== null) {
+    try {
+      const params = new URLSearchParams({ limit: 200 });
+      if (search) params.set('search', search);
+      if (region) params.set('region', region);
+      if (brightdataEnabled) params.set('live', 'true');
+
+      grid.innerHTML = brightdataEnabled
+        ? '<p style="color:var(--accent);padding:40px;text-align:center">⚡ Scraping LinkedIn live... this may take a moment</p>'
+        : '';
+
+      const data = await (await fetch(`${API}/api/icp-similar?${params}`)).json();
+      document.getElementById('icp-count').textContent = data.total;
+
+      if (data.source) {
+        const srcBadge = document.getElementById('icp-source');
+        if (srcBadge) srcBadge.textContent = data.source === 'hybrid' ? '⚡ Live + Static' : '📊 ' + data.source;
+      }
+
+      if (data.companies.length === 0) {
+        grid.innerHTML = '<p style="color:var(--text-3);padding:40px;text-align:center">No companies match your filters</p>';
+        return;
+      }
+      grid.innerHTML = data.companies.map(c => companyCard(c, 'icp')).join('');
+      return;
+    } catch (e) {
+      console.log('API unavailable, using static data');
+    }
+  }
+
+  // Static fallback
+  const companies = getCompaniesStatic('icp-similar', { search, region });
   document.getElementById('icp-count').textContent = companies.length;
 
-  const grid = document.getElementById('icp-grid');
   if (companies.length === 0) {
     grid.innerHTML = '<p style="color:var(--text-3);padding:40px;text-align:center">No companies match your filters</p>';
     return;
   }
-
   grid.innerHTML = companies.map(c => companyCard(c, 'icp')).join('');
 }
 
 // ============ HIGH-FIT ============
-function loadHighFit() {
+async function loadHighFit() {
   const search = document.getElementById('hf-search-input')?.value || '';
   const region = document.getElementById('hf-region-filter')?.value || '';
   const complexity = document.getElementById('hf-complexity-filter')?.value || '';
-  const companies = getCompanies('high-fit', { search, region, complexity });
+  const grid = document.getElementById('hf-grid');
 
+  // Try API mode first
+  if (API !== null) {
+    try {
+      const params = new URLSearchParams({ limit: 200 });
+      if (search) params.set('search', search);
+      if (region) params.set('region', region);
+      if (complexity) params.set('complexity', complexity);
+      if (brightdataEnabled) params.set('live', 'true');
+
+      grid.innerHTML = brightdataEnabled
+        ? '<p style="color:var(--accent);padding:40px;text-align:center">⚡ Scraping LinkedIn live... this may take a moment</p>'
+        : '';
+
+      const data = await (await fetch(`${API}/api/high-fit?${params}`)).json();
+      document.getElementById('hf-count').textContent = data.total;
+
+      if (data.companies.length === 0) {
+        grid.innerHTML = '<p style="color:var(--text-3);padding:40px;text-align:center">No companies match your filters</p>';
+        return;
+      }
+      grid.innerHTML = data.companies.map(c => companyCard(c, 'highfit')).join('');
+      return;
+    } catch (e) {
+      console.log('API unavailable, using static data');
+    }
+  }
+
+  // Static fallback
+  const companies = getCompaniesStatic('high-fit', { search, region, complexity });
   document.getElementById('hf-count').textContent = companies.length;
 
-  const grid = document.getElementById('hf-grid');
   if (companies.length === 0) {
     grid.innerHTML = '<p style="color:var(--text-3);padding:40px;text-align:center">No companies match your filters</p>';
     return;
   }
-
   grid.innerHTML = companies.map(c => companyCard(c, 'highfit')).join('');
 }
 
@@ -185,15 +286,17 @@ function loadHighFit() {
 function companyCard(c, type) {
   const complexityClass = (c.cloudComplexity || '').toLowerCase();
   const regionClass = (c.region || '').toLowerCase();
-  const linkedinCompany = `https://www.linkedin.com/company/${c.linkedinSlug || encodeURIComponent(c.company.toLowerCase().replace(/\s+/g, '-'))}`;
+  const linkedinCompany = c.linkedinUrl || `https://www.linkedin.com/company/${c.linkedinSlug || encodeURIComponent(c.company.toLowerCase().replace(/\s+/g, '-'))}`;
   const linkedinDM = `https://www.linkedin.com/search/results/people/?keywords=CTO+OR+"VP+Engineering"+OR+DevOps+OR+CISO+OR+CIO&company=${encodeURIComponent(c.company)}&origin=FACETED_SEARCH`;
   const googleVerify = `https://www.google.com/search?q=${encodeURIComponent(c.company + ' cloud infrastructure revenue')}`;
 
+  const liveBadge = c.scrapedLive ? '<span class="cc-badge live-badge">⚡ LIVE</span>' : '';
+
   return `
-    <div class="company-card">
+    <div class="company-card ${c.scrapedLive ? 'live-scraped' : ''}">
       <div class="cc-header">
         <div>
-          <div class="cc-name">${esc(c.company)}</div>
+          <div class="cc-name">${esc(c.company)} ${liveBadge}</div>
           <div class="cc-industry">${esc(c.industry)} &bull; ${esc(c.hq)}</div>
         </div>
         <div class="cc-badges">
@@ -204,7 +307,8 @@ function companyCard(c, type) {
 
       <div class="cc-row">
         ${(c.cloudProviders || '').split(',').map(p => `<span class="cc-tag">${esc(p.trim())}</span>`).join('')}
-        ${c.employeeCount ? `<span class="cc-tag">${esc(c.employeeCount)} employees</span>` : ''}
+        ${c.employeeCount ? `<span class="cc-tag">${esc(String(c.employeeCount))} employees</span>` : ''}
+        ${c.followers ? `<span class="cc-tag">${Number(c.followers).toLocaleString()} followers</span>` : ''}
       </div>
 
       <div class="cc-section">
@@ -238,8 +342,18 @@ function companyCard(c, type) {
 }
 
 // ============ STATS ============
-function loadStats() {
-  const s = getStats();
+async function loadStats() {
+  if (API !== null) {
+    try {
+      const s = await (await fetch(`${API}/api/stats`)).json();
+      renderStats(s);
+      return;
+    } catch (e) {}
+  }
+  renderStats(getStatsStatic());
+}
+
+function renderStats(s) {
   document.getElementById('stats-row').innerHTML = `
     <div class="stat-tile"><div class="stat-num">${s.totalCompanies}</div><div class="stat-lbl">Total Companies</div></div>
     <div class="stat-tile"><div class="stat-num">${s.icpSimilar}</div><div class="stat-lbl">ICP Match</div></div>
@@ -254,7 +368,8 @@ function loadStats() {
 
 // ============ VERIFY GRID ============
 function buildVerifyGrid() {
-  const unique = [...new Map(COMPANIES_DB.map(c => [c.company, c])).values()];
+  const db = (typeof COMPANIES_DB !== 'undefined') ? COMPANIES_DB : [];
+  const unique = [...new Map(db.map(c => [c.company, c])).values()];
 
   document.getElementById('verify-grid').innerHTML = shuffle(unique).map(c => `
     <div class="verify-card">
