@@ -1,6 +1,3 @@
-import dotenv from 'dotenv';
-dotenv.config();
-
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -26,5 +23,5 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n  LinkedIn Research Assistant by Muskan`);
   console.log(`  Server running at http://localhost:${PORT}`);
-  console.log(`  BrightData API: ${process.env.BRIGHTDATA_API_KEY ? '✅ Configured' : '❌ Not set'}\n`);
+  console.log(`  273 companies | Free discovery engine | No API keys needed\n`);
 });
