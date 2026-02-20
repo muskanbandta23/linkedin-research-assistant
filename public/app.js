@@ -1,4 +1,41 @@
-const API = '';
+// ============ STATIC DATA HELPERS ============
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getCompanies(category, { search = '', region = '', complexity = '' } = {}) {
+  let list = COMPANIES_DB.filter(c => c.category === category);
+  if (search) {
+    const q = search.toLowerCase();
+    list = list.filter(c =>
+      c.company.toLowerCase().includes(q) ||
+      c.industry.toLowerCase().includes(q) ||
+      (c.cloudProviders || '').toLowerCase().includes(q)
+    );
+  }
+  if (region) list = list.filter(c => c.region === region);
+  if (complexity) list = list.filter(c => c.cloudComplexity === complexity);
+  return shuffle(list);
+}
+
+function getStats() {
+  const all = COMPANIES_DB;
+  return {
+    totalCompanies: all.length,
+    icpSimilar: all.filter(c => c.category === 'icp-similar').length,
+    highFit: all.filter(c => c.category === 'high-fit').length,
+    indianCompanies: all.filter(c => c.region === 'India').length,
+    globalCompanies: all.filter(c => c.region === 'Global').length,
+    highComplexity: all.filter(c => c.cloudComplexity === 'High').length,
+    targetRoles: TARGET_ROLES.length,
+    verified: all.filter(c => c.verified).length
+  };
+}
 
 // ============ INIT ============
 document.addEventListener('DOMContentLoaded', () => {
@@ -87,7 +124,6 @@ function searchLinkedIn() {
     </div>
   `;
 
-  // Auto-open LinkedIn
   window.open(linkedinUrl, '_blank');
   toast('Opening LinkedIn for ' + company);
 }
@@ -111,45 +147,38 @@ function quickSearch(company) {
 }
 
 // ============ ICP SIMILAR ============
-async function loadICP() {
+function loadICP() {
   const search = document.getElementById('icp-search-input')?.value || '';
   const region = document.getElementById('icp-region-filter')?.value || '';
-  const params = new URLSearchParams({ limit: 200 });
-  if (search) params.set('search', search);
-  if (region) params.set('region', region);
+  const companies = getCompanies('icp-similar', { search, region });
 
-  const data = await (await fetch(`${API}/api/icp-similar?${params}`)).json();
-  document.getElementById('icp-count').textContent = data.total;
+  document.getElementById('icp-count').textContent = companies.length;
 
   const grid = document.getElementById('icp-grid');
-  if (data.companies.length === 0) {
+  if (companies.length === 0) {
     grid.innerHTML = '<p style="color:var(--text-3);padding:40px;text-align:center">No companies match your filters</p>';
     return;
   }
 
-  grid.innerHTML = data.companies.map(c => companyCard(c, 'icp')).join('');
+  grid.innerHTML = companies.map(c => companyCard(c, 'icp')).join('');
 }
 
 // ============ HIGH-FIT ============
-async function loadHighFit() {
+function loadHighFit() {
   const search = document.getElementById('hf-search-input')?.value || '';
   const region = document.getElementById('hf-region-filter')?.value || '';
   const complexity = document.getElementById('hf-complexity-filter')?.value || '';
-  const params = new URLSearchParams({ limit: 200 });
-  if (search) params.set('search', search);
-  if (region) params.set('region', region);
-  if (complexity) params.set('complexity', complexity);
+  const companies = getCompanies('high-fit', { search, region, complexity });
 
-  const data = await (await fetch(`${API}/api/high-fit?${params}`)).json();
-  document.getElementById('hf-count').textContent = data.total;
+  document.getElementById('hf-count').textContent = companies.length;
 
   const grid = document.getElementById('hf-grid');
-  if (data.companies.length === 0) {
+  if (companies.length === 0) {
     grid.innerHTML = '<p style="color:var(--text-3);padding:40px;text-align:center">No companies match your filters</p>';
     return;
   }
 
-  grid.innerHTML = data.companies.map(c => companyCard(c, 'highfit')).join('');
+  grid.innerHTML = companies.map(c => companyCard(c, 'highfit')).join('');
 }
 
 // ============ CARD RENDERER ============
@@ -209,8 +238,8 @@ function companyCard(c, type) {
 }
 
 // ============ STATS ============
-async function loadStats() {
-  const s = await (await fetch(`${API}/api/stats`)).json();
+function loadStats() {
+  const s = getStats();
   document.getElementById('stats-row').innerHTML = `
     <div class="stat-tile"><div class="stat-num">${s.totalCompanies}</div><div class="stat-lbl">Total Companies</div></div>
     <div class="stat-tile"><div class="stat-num">${s.icpSimilar}</div><div class="stat-lbl">ICP Match</div></div>
@@ -224,16 +253,10 @@ async function loadStats() {
 }
 
 // ============ VERIFY GRID ============
-async function buildVerifyGrid() {
-  const [icp, hf] = await Promise.all([
-    (await fetch(`${API}/api/icp-similar?limit=200`)).json(),
-    (await fetch(`${API}/api/high-fit?limit=200`)).json()
-  ]);
+function buildVerifyGrid() {
+  const unique = [...new Map(COMPANIES_DB.map(c => [c.company, c])).values()];
 
-  const all = [...icp.companies, ...hf.companies];
-  const unique = [...new Map(all.map(c => [c.company, c])).values()];
-
-  document.getElementById('verify-grid').innerHTML = unique.map(c => `
+  document.getElementById('verify-grid').innerHTML = shuffle(unique).map(c => `
     <div class="verify-card">
       <h4>${esc(c.company)}</h4>
       <div class="verify-links">
@@ -241,7 +264,7 @@ async function buildVerifyGrid() {
         <a class="verify-link" href="https://www.google.com/search?q=${encodeURIComponent(c.company + ' cloud infrastructure AWS Azure GCP')}" target="_blank">Cloud</a>
         <a class="verify-link" href="https://www.google.com/search?q=${encodeURIComponent(c.company + ' DevOps SRE hiring')}" target="_blank">DevOps</a>
         <a class="verify-link" href="https://www.google.com/search?q=${encodeURIComponent(c.company + ' technology stack')}" target="_blank">Tech</a>
-        <a class="verify-link" href="https://www.linkedin.com/company/${c.linkedinSlug || encodeURIComponent(c.company.toLowerCase().replace(/\\s+/g, '-'))}" target="_blank">LinkedIn</a>
+        <a class="verify-link" href="https://www.linkedin.com/company/${c.linkedinSlug || encodeURIComponent(c.company.toLowerCase().replace(/\s+/g, '-'))}" target="_blank">LinkedIn</a>
       </div>
     </div>
   `).join('');
